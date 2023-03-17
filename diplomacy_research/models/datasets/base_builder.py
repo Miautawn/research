@@ -231,6 +231,7 @@ class BaseBuilder(metaclass=ABCMeta):
                 raise RuntimeError('Unsupported feature type.')
 
         data = tf.parse_single_example(example_proto, tf_features)
+        
         proto_fields = self.parse_sparse_fields(self.proto_fields)
 
         # Decoding from protocol buffer
@@ -300,6 +301,7 @@ class BaseBuilder(metaclass=ABCMeta):
             # Valid type according to tf.io.decode_raw
             elif proto_field.dtype in [np.float16, np.float32, np.float64, np.int32, np.uint16, np.uint8, np.int16,
                                        np.int8, np.int64, None]:
+                
                 features[feature_name] = generic_feature(features[feature_name], proto_field.dtype)
 
             # Bool - Casting to uint8

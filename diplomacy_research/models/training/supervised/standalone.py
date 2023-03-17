@@ -57,6 +57,7 @@ def start_standalone_training(trainer):
                                                config=tf.ConfigProto(**trainer.config_proto),
                                                save_summaries_steps=None,
                                                save_summaries_secs=None) as sess:
+            
 
             # Wrapping in a session debugger
             if trainer.flags.debug:
@@ -126,13 +127,14 @@ def run_training_epoch(trainer, sess):
             and not trainer.flags.profile:
         LOGGER.info('Only running validation for the first epoch (to get pre-training performance).')
         trainer.supervised_dataset.mark_as_done()
+    
 
     # Variables for stats
     loss = 0.
     trainer.status_time = int(time.time())
     trainer.step_last_status = 0
 
-    # Method to run
+    # Method to run - gradient step
     method_to_run = run_profile_step if trainer.flags.profile else run_gradient_step
 
     # Running epoch
@@ -200,6 +202,8 @@ def run_validation_epoch(trainer, sess):
         :type trainer: diplomacy_research.models.training.supervised.trainer.SupervisedTrainer
     """
     from diplomacy_research.utils.tensorflow import tf
+    
+    print("Hiii I'm validating")
 
     # Initializing the dataset to use the training set
     if trainer.supervised_dataset.training_mode != TrainingMode.VALIDATION:

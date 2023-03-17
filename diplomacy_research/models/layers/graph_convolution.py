@@ -36,7 +36,7 @@ def preprocess_adjacency(adjacency_matrix):
 
     # Calculating the sum of each row
     sum_of_row = np.array(adj_tilde.sum(1))
-
+    
     # Calculating the D tilde matrix ^ (-1/2)
     d_inv_sqrt = np.power(sum_of_row, -0.5).flatten()
     d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
@@ -71,6 +71,9 @@ class GraphConvolution():
         # Initializing variables
         with tf.variable_scope(scope, 'GraphConv', reuse=reuse):
             self.var_w = he('W', [NB_NODES, input_dim, output_dim])
+            
+            # self.var_w = tf.Print(self.var_w, [tf.shape(self.var_w)], message = "r")
+            
             if self.bias:
                 self.var_b = zeros('b', [output_dim])
 
@@ -93,6 +96,8 @@ class GraphConvolution():
         post_act = self.activation_fn(pre_act)
         if self.residual:
             post_act += inputs
+            
+        # post_act = tf.Print(post_act, [tf.shape(post_act)], message = "r")
         return post_act                                             # (b, N, out)
 
 def film_gcn_res_block(inputs, gamma, beta, gcn_out_dim, norm_adjacency, is_training, residual=True,
@@ -119,6 +124,8 @@ def film_gcn_res_block(inputs, gamma, beta, gcn_out_dim, norm_adjacency, is_trai
                                   bias=True)(inputs)
     gcn_bn_result = batch_norm(gcn_result, is_training=is_training, fused=True)
     film_result = gamma * gcn_bn_result + beta
+    
+    
 
     # Applying activation fn and residual connection
     if activation_fn is not None:

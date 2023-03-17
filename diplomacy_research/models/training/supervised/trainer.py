@@ -189,4 +189,7 @@ class SupervisedTrainer():
             session_args['run_metadata'] = run_metadata
 
         # Running
-        return sess.run(**session_args)
+        # print("Session arguments: ", session_args)
+        results = sess.run(**session_args)
+        # print("Seesion results: ", results)
+        return results

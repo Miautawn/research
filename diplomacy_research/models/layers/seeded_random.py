@@ -17,6 +17,8 @@
 import sys
 assert 'tensorflow' in sys.modules, 'You need to import TF before importing this module.'
 
+from diplomacy_research.utils.tensorflow import tf
+
 from diplomacy_research.utils.tensorflow import array_ops
 from diplomacy_research.utils.tensorflow import gen_array_ops
 from diplomacy_research.utils.tensorflow import dtypes
@@ -42,6 +44,7 @@ def seeded_random(seeds, offset, shape, dtype, seed=None, name=None):
         :param name: A name for the operation (optional).
         :return: A tensor of the specified shape filled with deterministic random values.
     """
+    
     if dtype not in (dtypes.float16, dtypes.bfloat16, dtypes.float32, dtypes.float64):
         raise ValueError('Invalid dtype %r' % dtype)
     with ops.name_scope(name, 'seeded_random', [shape]):
@@ -52,4 +55,5 @@ def seeded_random(seeds, offset, shape, dtype, seed=None, name=None):
         graph_seed, op_seed = random_seed.get_seed(seed)
         matrix_output = SEEDED_RANDOM_SO.seeded_random(seeds, offset, size, seed=graph_seed, seed2=op_seed)
         output = gen_array_ops.reshape(matrix_output, array_ops.concat([(-1,), shape], axis=0))
+        
         return math_ops.cast(output, dtype)

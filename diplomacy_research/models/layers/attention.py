@@ -19,6 +19,7 @@ import sys
 assert 'tensorflow' in sys.modules, 'You need to import TF before importing this module.'
 import numpy as np
 
+import diplomacy_research.utils.tensorflow as tf
 from diplomacy_research.models.layers.layers import Identity
 from diplomacy_research.utils.tensorflow import _transpose_batch_time
 from diplomacy_research.utils.tensorflow import _unstack_ta
@@ -463,6 +464,7 @@ class StaticAttentionWrapper(rnn_cell_impl.RNNCell):
         # Setting values
         self._cell = cell
         self._memory = memory
+        self.alignments = alignments
         self._attention_layer_size = attention_layer_size
         self._output_attention = output_attention
         self._memory_time = alignments.get_shape()[-1].value
@@ -486,9 +488,27 @@ class StaticAttentionWrapper(rnn_cell_impl.RNNCell):
             probability_fn = nn_ops.softmax
         if score_mask_value is None:
             score_mask_value = dtypes.as_dtype(self._memory.dtype).as_numpy_dtype(-np.inf)
+        # I don't see it used here :(
         self._probability_fn = lambda score, _: probability_fn(_maybe_mask_score(score,
                                                                                  sequence_length,
                                                                                  score_mask_value), _)
+        
+        # def _maybe_mask_score(score, memory_sequence_length, score_mask_value):
+        #   if memory_sequence_length is None:
+        #     return score
+        #   message = ("All values in memory_sequence_length must greater than zero.")
+        #   with ops.control_dependencies(
+        #       [check_ops.assert_positive(memory_sequence_length, message=message)]):
+        #     score_mask = array_ops.sequence_mask(
+        #         memory_sequence_length, maxlen=array_ops.shape(score)[1])
+        #     score_mask_values = score_mask_value * array_ops.ones_like(score)
+        #     return array_ops.where(score_mask, score, score_mask_values)
+        
+        
+      #   def _unstack_ta(inp):
+      #   return tensor_array_ops.TensorArray(
+          # dtype=inp.dtype, size=array_ops.shape(inp)[0],
+          # element_shape=inp.get_shape()[1:]).unstack(inp)
 
         # Storing alignments as TA
         # Padding with 1 additional zero, to prevent error on read(0)
@@ -497,6 +517,7 @@ class StaticAttentionWrapper(rnn_cell_impl.RNNCell):
         self._alignments_ta = nest.map_structure(_unstack_ta, alignments)       # [time_step + 1, batch, memory_time]
         self._initial_alignment = self._alignments_ta.read(0)
         self._initial_attention = self._compute_attention(self._initial_alignment, self._memory)[0]
+        
 
         # Storing zero inputs
         batch_size = array_ops.shape(memory)[0]
@@ -578,7 +599,7 @@ class StaticAttentionWrapper(rnn_cell_impl.RNNCell):
 
         next_time = state.time + 1
         finished = (next_time >= self._sequence_length)
-        all_finished = math_ops.reduce_all(finished)
+        all_finished = math_ops.reduce_all(finished) # checks if all are true
 
         def get_next_alignments():
             """ Returns the next alignments """

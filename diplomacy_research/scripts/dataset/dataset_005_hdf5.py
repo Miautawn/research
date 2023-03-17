@@ -18,7 +18,7 @@
 from collections import OrderedDict
 import glob
 import logging
-import multiprocessing
+import concurrent
 import os
 import pickle
 import shutil
@@ -115,7 +115,7 @@ def build():
     # Building
     dataset_index = {}
     LOGGER.info('... Building HDF5 dataset.')
-    with multiprocessing.Pool() as pool:
+    with concurrent.futures.ProcessPoolExecutor() as executor:
         with h5py.File(DATASET_PATH, 'w') as hdf5_dataset, open(PROTO_DATASET_PATH, 'wb') as proto_dataset:
 
             for json_file_path in glob.glob(extract_dir + '/*.jsonl'):
@@ -126,7 +126,7 @@ def build():
                 # Processing file using pool
                 with open(json_file_path, 'r') as json_file:
                     lines = json_file.read().splitlines()
-                    for game_id, saved_game_zlib in tqdm(pool.imap_unordered(process_game, lines), total=len(lines)):
+                    for game_id, saved_game_zlib in tqdm(executor.map(process_game, lines), total=len(lines)):
                         if game_id is None:
                             continue
                         saved_game_proto = zlib_to_proto(saved_game_zlib, SavedGameProto)
@@ -159,9 +159,9 @@ def build():
         pickle.dump(nb_phases, file, pickle.HIGHEST_PROTOCOL)
 
     # Deleting extract_dir
-    LOGGER.info('... Deleting extracted files.')
-    if os.path.exists(extract_dir):
-        shutil.rmtree(extract_dir, ignore_errors=True)
+    # LOGGER.info('... Deleting extracted files.')
+    # if os.path.exists(extract_dir):
+    #     shutil.rmtree(extract_dir, ignore_errors=True)
     LOGGER.info('... Done building HDF5 dataset.')
 
 

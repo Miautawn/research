@@ -23,6 +23,7 @@ from diplomacy_research.models.state_space import get_top_victors, get_current_s
 from diplomacy_research.proto.diplomacy_proto.game_pb2 import SavedGame as SavedGameProto
 from diplomacy_research.utils.proto import bytes_to_proto
 from diplomacy_research.settings import WORKING_DIR, PROTOBUF_DATE
+import pickle
 
 # Constants
 LOGGER = logging.getLogger(__name__)

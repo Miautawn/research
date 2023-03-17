@@ -34,6 +34,8 @@ from diplomacy_research.utils.tensorflow import nn_ops
 from diplomacy_research.utils.tensorflow import rnn_cell_impl
 from diplomacy_research.utils.tensorflow import tensor_shape
 
+from diplomacy_research.utils.tensorflow import tf
+
 
 def seeded_dropout(inputs, seeds, keep_probs, offset=None, noise_shape=None, seed=None, name=None):
     """ Computes dropout (with a deterministic mask).
@@ -187,9 +189,10 @@ class SeededDropoutWrapper(rnn_cell_impl.DropoutWrapper):
         self._state_keep_probs = _convert_to_probs_tensor(state_keep_probs)
 
         # Detecting if we skip computing those probs
-        self._skip_input_keep_probs = isinstance(input_keep_probs, float) and input_keep_probs == 1.
-        self._skip_output_keep_probs = isinstance(output_keep_probs, float) and output_keep_probs == 1.
-        self._skip_state_keep_probs = isinstance(state_keep_probs, float) and state_keep_probs == 1.
+        self._skip_input_keep_probs = isinstance(input_keep_probs, float) and input_keep_probs == 1.  # this is 0
+        self._skip_output_keep_probs = isinstance(output_keep_probs, float) and output_keep_probs == 1.  # this is 0
+        self._skip_state_keep_probs = isinstance(state_keep_probs, float) and state_keep_probs == 1.  # this is 1
+        
 
         # Generating variational recurrent
         self._seeds = seeds
@@ -220,6 +223,8 @@ class SeededDropoutWrapper(rnn_cell_impl.DropoutWrapper):
                 if input_size is None:
                     raise ValueError("When variational_recurrent=True and input_keep_prob < 1.0 or "
                                      "is unknown, input_size must be provided")
+                    
+                # the offset is static here
                 self._recurrent_input_noise = enum_map_up_to(input_size, input_map_fn, input_size)
             self._recurrent_state_noise = enum_map_up_to(cell.state_size, state_map_fn, cell.state_size)
             self._recurrent_output_noise = enum_map_up_to(cell.output_size, output_map_fn, cell.output_size)
@@ -256,6 +261,7 @@ class SeededDropoutWrapper(rnn_cell_impl.DropoutWrapper):
 
         def reg_dropout_map_fn(index, do_dropout, value):
             """ Applies regular dropout """
+            
             if not isinstance(do_dropout, bool) or do_dropout:
                 return seeded_dropout(value, self._seeds, keep_probs,
                                       offset=SeededDropoutWrapper.offset + offset,
@@ -264,6 +270,7 @@ class SeededDropoutWrapper(rnn_cell_impl.DropoutWrapper):
 
         def var_dropout_map_fn(index, do_dropout, value, noise):
             """ Applies variational dropout """
+            # value = tf.Print(value, [noise], message = "keep probs: ")
             if noise is None:
                 return value
             if not isinstance(do_dropout, bool) or do_dropout:
@@ -274,6 +281,8 @@ class SeededDropoutWrapper(rnn_cell_impl.DropoutWrapper):
         # To traverse the entire structure; inside the dropout fn, we check to see if leafs of this are bool or not
         if filtered_structure is None:
             filtered_structure = values
+            
+        
 
         # Regular Dropout
         if not self._variational_recurrent:
@@ -290,6 +299,8 @@ class SeededDropoutWrapper(rnn_cell_impl.DropoutWrapper):
 
         # Dropout on inputs
         if not self._skip_input_keep_probs:
+            
+            # inputs = tf.Print(inputs, [tf.shape(self._recurrent_output_noise)], message = "original noise shape: ")
             inputs = self._do_dropout(inputs,
                                       offset=state.time * 46202587,
                                       salt_prefix='input',
@@ -297,6 +308,7 @@ class SeededDropoutWrapper(rnn_cell_impl.DropoutWrapper):
                                       keep_probs=self._input_keep_probs)
 
         # Dropout on state
+        # hidden_state, (cell_state, hidden_state)
         output, new_state = self._cell(inputs, state.cell_state, scope=scope)
         if not self._skip_state_keep_probs:
             shallow_filtered_substructure = nest.get_traverse_shallow_structure(self._dropout_state_filter, new_state)

@@ -201,16 +201,22 @@ class SupervisedDataset():
 
     def build(self):
         """ Builds the TensorFlow datasets """
+        print("BUILDING THE DATASET!!!!")
         from diplomacy_research.utils.tensorflow import tf
         assert 'request_id' in self.dataset_builder.get_proto_fields(), 'You need to have a "request_id" field.'
 
         # Training dataset
         self.training_dataset = tf.data.TFRecordDataset(self.dataset_builder.training_dataset_path,
                                                         compression_type='GZIP')
+        print("printing types/shapes/classes")
+        print(self.training_dataset.output_types)
+        print(self.training_dataset.output_shapes)
+        print(self.training_dataset.output_classes)
 
         # Debug (batch) mode
         # Only taking one batch and looping over that batch forever
         if self.debug_batch:
+            print("I'm In debug batch")
             self.training_dataset = self.training_dataset.take(self.batch_size)
             self.training_dataset = self.training_dataset.repeat(count=-1)
 
@@ -218,16 +224,20 @@ class SupervisedDataset():
         # Otherwise, sharding and shuffling the dataset
         # Repeating to make sure all workers can loop on the dataset at all times
         else:
+            print("I'm NOT IN debug batch")
             if self.cluster_config and self.num_shards > 1:
+                print("I'm SHARDING THE DATASET")
                 LOGGER.info('Sharding dataset. There are %d shards. Current shard index: #%d.',
                             self.cluster_config.num_shards, self.cluster_config.shard_index)
                 shard_fn = tf.data.experimental.filter_for_shard(num_shards=self.cluster_config.num_shards,
                                                                  shard_index=self.cluster_config.shard_index)
                 self.training_dataset = self.training_dataset.apply(shard_fn)
                 self.training_dataset = self.training_dataset.repeat()
+            print("I'm NOT sharding the dataset")
             self.training_dataset = self.training_dataset.shuffle(100 * self.batch_size)
 
         # Batching with prefetching
+        print(self.dataset_builder.parse_function)
         self.training_dataset = self.training_dataset.map(self.dataset_builder.parse_function,
                                                           num_parallel_calls=multiprocessing.cpu_count())
         self.training_dataset = self.training_dataset.prefetch(100 * self.batch_size)

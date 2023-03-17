@@ -50,6 +50,8 @@ class PolicyModel(OrderBasedPolicyModel):
         """
         from diplomacy_research.utils.tensorflow import tf
         from diplomacy_research.models.layers.graph_convolution import film_gcn_res_block, preprocess_adjacency
+        
+        
 
         # Quick function to retrieve hparams and placeholders and function shorthands
         hps = lambda hparam_name: self.hparams[hparam_name]
@@ -62,17 +64,26 @@ class PolicyModel(OrderBasedPolicyModel):
 
         # Computing norm adjacency
         norm_adjacency = preprocess_adjacency(get_adjacency_matrix())
+        
         norm_adjacency = tf.tile(tf.expand_dims(norm_adjacency, axis=0), [tf.shape(board_state)[0], 1, 1])
+        
+        # norm_adjacency = tf.Print(norm_adjacency, [norm_adjacency], message = "matrix: ")
 
         # Building scope
         scope = tf.VariableScope(name='policy/%s' % name, reuse=reuse)
         with tf.variable_scope(scope):
+            
 
             # Adding noise to break symmetry
             board_state = board_state + tf.random_normal(tf.shape(board_state), stddev=0.01)
+            
+            #board_state = tf.Print(board_state, [tf.shape(board_state)], message = "haha: ")
             graph_conv = tf.layers.Dense(units=hps('gcn_size'), activation=relu)(board_state)
+            
 
             # First and intermediate layers
+            
+            
             for layer_idx in range(hps('nb_graph_conv') - 1):
                 graph_conv = film_gcn_res_block(inputs=graph_conv,                          # (b, NB_NODES, gcn_size)
                                                 gamma=film_gammas[layer_idx],
@@ -81,6 +92,7 @@ class PolicyModel(OrderBasedPolicyModel):
                                                 norm_adjacency=norm_adjacency,
                                                 is_training=pholder('is_training'),
                                                 residual=True)
+                
 
             # Last layer
             graph_conv = film_gcn_res_block(inputs=graph_conv,                              # (b, NB_NODES, final_size)
@@ -133,6 +145,7 @@ class PolicyModel(OrderBasedPolicyModel):
                 current_power = self.features['current_power']              # tf.int32 - (b,)
                 current_season = self.features['current_season']            # tf.int32 - (b,)
                 dropout_rates = self.features['dropout_rate']               # tf.flt32 - (b,)
+                
 
                 # Batch size
                 batch_size = tf.shape(board_state)[0]
@@ -140,11 +153,16 @@ class PolicyModel(OrderBasedPolicyModel):
                 # Reshaping board alignments
                 board_alignments = tf.reshape(board_alignments, [batch_size, -1, NB_NODES])
                 board_alignments /= tf.math.maximum(1., tf.reduce_sum(board_alignments, axis=-1, keepdims=True))
+                
+                # board_alignments = tf.Print(board_alignments, [dropout_rates], message = "previous drop_out_rates: ")  
 
                 # Overriding dropout_rates if pholder('dropout_rate') > 0
                 dropout_rates = tf.cond(tf.greater(pholder('dropout_rate'), 0.),
                                         true_fn=lambda: tf.zeros_like(dropout_rates) + pholder('dropout_rate'),
                                         false_fn=lambda: dropout_rates)
+                
+                # board_alignments = tf.Print(board_alignments, [pholder('dropout_rate')], message = "pholder: ")  
+                
 
                 # Padding decoder_inputs and candidates
                 board_alignments = pad_axis(board_alignments, axis=1, min_size=tf.reduce_max(decoder_lengths))
@@ -189,15 +207,20 @@ class PolicyModel(OrderBasedPolicyModel):
                     board_film_weights = tf.layers.Dense(units=2 * sum(film_output_dims),               # (b, 1, 750)
                                                          use_bias=True,
                                                          activation=None)(film_embedding_input)[:, None, :]
-                    board_film_gammas, board_film_betas = tf.split(board_film_weights, 2, axis=2)       # (b, 1, 750)
+                    
+
+                    board_film_gammas, board_film_betas = tf.split(board_film_weights, 2, axis=2)       # (b, 1, 750)       
                     board_film_gammas = tf.split(board_film_gammas, film_output_dims, axis=2)
                     board_film_betas = tf.split(board_film_betas, film_output_dims, axis=2)
+
 
                     # For prev_orders
                     prev_ord_film_weights = tf.layers.Dense(units=2 * sum(film_output_dims),            # (b, 1, 750)
                                                             use_bias=True,
                                                             activation=None)(film_embedding_input)[:, None, :]
+                    
                     prev_ord_film_weights = tf.tile(prev_ord_film_weights, [NB_PREV_ORDERS, 1, 1])      # (n_pr, 1, 750)
+                    
                     prev_ord_film_gammas, prev_ord_film_betas = tf.split(prev_ord_film_weights, 2, axis=2)
                     prev_ord_film_gammas = tf.split(prev_ord_film_gammas, film_output_dims, axis=2)
                     prev_ord_film_betas = tf.split(prev_ord_film_betas, film_output_dims, axis=2)
@@ -207,6 +230,8 @@ class PolicyModel(OrderBasedPolicyModel):
                     self.add_output('_board_state_conv_film_betas', board_film_betas)
                     self.add_output('_prev_orders_conv_film_gammas', prev_ord_film_gammas)
                     self.add_output('_prev_orders_conv_film_betas', prev_ord_film_betas)
+                    
+                    # board_state = tf.Print(board_state, [tf.shape(board_state)], message = "haha: ")
 
                 # Creating graph convolution
                 with tf.variable_scope('graph_conv_scope'):
@@ -215,12 +240,18 @@ class PolicyModel(OrderBasedPolicyModel):
 
                     # Encoding board state
                     board_state_0yr_conv = self.encode_board(board_state, name='board_state_conv')
+                    
+                    # board_state_0yr_conv = tf.Print(board_state_0yr_conv, [tf.shape(board_state_0yr_conv)], message = "grr: ")
 
                     # Encoding prev_orders
                     prev_orders_state = tf.reshape(prev_orders_state, [batch_size * NB_PREV_ORDERS,
                                                                        NB_NODES,
                                                                        NB_ORDERS_FEATURES])
+                    
+                    
                     prev_ord_conv = self.encode_board(prev_orders_state, name='prev_orders_conv')
+                    
+                    # prev_ord_conv = tf.Print(prev_ord_conv, [tf.shape(prev_ord_conv)], message = "haha: ")
 
                     # Splitting back into (b, nb_prev, NB_NODES, attn_size // 2)
                     # Reducing the prev ord conv using avg
@@ -228,11 +259,15 @@ class PolicyModel(OrderBasedPolicyModel):
                                                                NB_PREV_ORDERS,
                                                                NB_NODES,
                                                                hps('attn_size') // 2])
+                    
+                    
                     prev_ord_conv = tf.reduce_mean(prev_ord_conv, axis=1)
 
                     # Concatenating the current board conv with the prev ord conv
                     # The final board_state_conv should be of dimension (b, NB_NODE, attn_size)
                     board_state_conv = self.get_board_state_conv(board_state_0yr_conv, is_training, prev_ord_conv)
+                    
+                    # board_state_conv = tf.Print(board_state_conv, [tf.shape(board_state_conv)], message = "haha: ")
 
                 # Creating order embedding vector (to embed order_ix)
                 # Embeddings needs to be cached locally on the worker, otherwise TF can't compute their gradients
@@ -245,6 +280,8 @@ class PolicyModel(OrderBasedPolicyModel):
                                               scale=1.,
                                               partitioner=partitioner,
                                               caching_device=caching_device)
+                    
+                    
 
                 # Creating candidate embedding
                 with tf.variable_scope('candidate_embedding_scope'):
@@ -256,11 +293,15 @@ class PolicyModel(OrderBasedPolicyModel):
                                                   scale=1.,
                                                   partitioner=partitioner,
                                                   caching_device=caching_device)
-
+                    
+                    
                 # Trimming to the maximum number of candidates
                 candidate_lengths = tf.reduce_sum(to_int32(tf.math.greater(candidates, PAD_ID)), -1)    # int32 - (b,)
+                
                 max_candidate_length = tf.math.maximum(1, tf.reduce_max(candidate_lengths))
+                
                 candidates = candidates[:, :, :max_candidate_length]
+            
 
         # Building output tags
         outputs = {'batch_size': batch_size,
@@ -306,6 +347,9 @@ class PolicyModel(OrderBasedPolicyModel):
                 player_seeds = self.features['player_seed']                 # tf.int32 - (b,)
                 temperature = self.features['temperature']                  # tf,flt32 - (b,)
                 dropout_rates = self.features['dropout_rate']               # tf.flt32 - (b,)
+                
+                
+                
 
                 # Placeholders
                 stop_gradient_all = pholder('stop_gradient_all')
@@ -322,20 +366,90 @@ class PolicyModel(OrderBasedPolicyModel):
                 candidate_embedding = self.outputs['candidate_embedding']
                 candidates = self.outputs['candidates']
                 max_candidate_length = self.outputs['max_candidate_length']
+                
 
                 # --- Decoding ---
                 with tf.variable_scope('decoder_scope', reuse=tf.AUTO_REUSE):
                     lstm_cell = tf.contrib.rnn.LSTMBlockCell(hps('lstm_size'))
+                    
+                    player_seeds = player_seeds + 1
+                    # player_seeds = tf.Print(player_seeds, [player_seeds], message = "seeds: ")
+                    # player_seeds = tf.Print(player_seeds, [tf.shape(player_seeds)], message = "seed shape: ")
+                    # player_seeds = tf.Print(player_seeds, [tf.unique(player_seeds)], message = "unique seeds: ")
+                    
+                    # player_seeds
+                    # my_seeds = tf.ones(128, dtype = tf.int32)
+                    # my_seeds = tf.random.uniform(
+                    #                 [128],
+                    #                 minval=0,
+                    #                 maxval=3,
+                    #                 dtype=tf.dtypes.int32,
+                    #                 seed=42,
+                    #             )
 
                     # ======== Regular Decoding ========
                     # Applying Dropout to input, attention and output
                     decoder_cell = SeededDropoutWrapper(cell=lstm_cell,
                                                         seeds=player_seeds,
+                                                        # seeds = my_seeds,
                                                         input_keep_probs=1. - dropout_rates,
                                                         output_keep_probs=1. - dropout_rates,
                                                         variational_recurrent=hps('use_v_dropout'),
                                                         input_size=hps('order_emb_size') + hps('attn_size'),
                                                         dtype=tf.float32)
+                    
+                    # order_embedding = tf.Print(order_embedding, [order_embedding], message = "order_embedding: ")
+                    # candidate_embedding = tf.Print(candidate_embedding, [candidate_embedding], message = "candidate_embedding: ")
+                    
+                    # board_alignments = tf.Print(board_alignments, [tf.shape(lstm_cell.zero_state(batch_size, tf.float32))], message = "test:") 
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._input_keep_probs, tf.shape(decoder_cell._input_keep_probs)], message = "_input_keep_probs: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._output_keep_probs, tf.shape(decoder_cell._output_keep_probs)], message = "_output_keep_probs: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._state_keep_probs, tf.shape(decoder_cell._state_keep_probs)], message = "_state_keep_probs: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._skip_input_keep_probs], message = "_skip_input_keep_probs: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._skip_output_keep_probs], message = "_skip_output_keep_probs: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._skip_state_keep_probs], message = "_skip_input_keep_probs: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._output_keep_probs, tf.shape(decoder_cell._output_keep_probs)], message = "_recurrent_output_probs: ")
+                    
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_input_noise, tf.shape(decoder_cell._recurrent_input_noise)], message = "_recurrent_input_noise: ")
+                    # board_alignments = tf.Print(board_alignments, [my_seeds], message = "my seeds: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_input_noise, tf.shape(decoder_cell._recurrent_input_noise)], message = "_recurrent_input_noise_1: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_input_noise[1], tf.shape(decoder_cell._recurrent_input_noise)], message = "_recurrent_input_noise_2: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_input_noise[2], tf.shape(decoder_cell._recurrent_input_noise)], message = "_recurrent_input_noise_3: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_output_noise, tf.shape(decoder_cell._recurrent_output_noise)], message = "_recurrent_output_noise_1: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_output_noise[1], tf.shape(decoder_cell._recurrent_output_noise)], message = "_recurrent_output_noise_2: ")
+#                     board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_state_noise[0], tf.shape(decoder_cell._recurrent_state_noise[0])], message = "_recurrent_state_noise_1: ")
+#                     board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_state_noise[1], tf.shape(decoder_cell._recurrent_state_noise[1])], message = "_recurrent_state_noise_2: ")
+
+#                     board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_output_noise, tf.shape(decoder_cell._recurrent_output_noise)], message = "_recurrent_output_noise: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_state_noise, tf.shape(decoder_cell._recurrent_state_noise)], message = "_recurrent_state_noise: ")
+                    
+                    # board_alignments = tf.Print(board_alignments, [hps('order_emb_size') + hps('attn_size')], message = "lstm input size")
+                    # board_alignments = tf.Print(board_alignments, [lstm_cell.state_size], message = "lstm state size")
+                    # board_alignments = tf.Print(board_alignments, [lstm_cell.output_size], message = "lstm output size")
+
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._skip_input_keep_probs], message = "input skip: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._skip_output_keep_probs], message = "output skip: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._skip_state_keep_probs], message = "state skip: ")
+                    
+                    # board_alignments = tf.Print(board_alignments, [tf.shape(decoder_cell._recurrent_input_noise)], message = "input size: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_input_noise], message = "input size: ")
+                    # board_alignments = tf.Print(board_alignments, [tf.shape(decoder_cell._recurrent_output_noise)], message = "output size: ")
+                    # board_alignments = tf.Print(board_alignments, [tf.shape(decoder_cell._recurrent_state_noise)], message = "state size: ")
+                    
+#                     board_alignments = tf.Print(board_alignments, [lstm_cell.state_size], message = "cell state size: ")
+
+                    # board_alignments = tf.Print(board_alignments, [tf.shape(decoder_cell._recurrent_state_noise)], message = "state size: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_state_noise], message = "state: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_state_noise[0]], message = "state [0]: ")
+                    # board_alignments = tf.Print(board_alignments, [decoder_cell._recurrent_state_noise[1]], message = "state [1]: ")
+                    
+                    #trying something
+                    # from diplomacy_research.ground_truth_data import board_state_conv, board_alignments
+                    # board_state_conv = tf.constant(board_state_conv)
+                    # board_alignments = tf.constant(board_alignments)
+                    
+                    # board_state_conv = tf.Print(board_state_conv, [tf.shape(board_state_conv)], message="test board_state_conv: ")
+                    # board_alignments = tf.Print(board_alignments, [tf.shape(board_alignments)], message="test board_alignments: ")
 
                     # Apply attention over orderable location at each position
                     decoder_cell = StaticAttentionWrapper(cell=decoder_cell,
@@ -343,13 +457,41 @@ class PolicyModel(OrderBasedPolicyModel):
                                                           alignments=board_alignments,
                                                           sequence_length=raw_decoder_lengths,
                                                           output_attention=False)
-
+                    
+#                     decoder_lengths = tf.Print(decoder_lengths, [tf.shape(decoder_cell._initial_attention)], message = "_initial_attention")
+                    # decoder_lengths = tf.Print(decoder_lengths, [decoder_cell._initial_alignment[1]], message = "_initial_alignment")
+                                        
+                    # decoder_lengths = tf.Print(decoder_lengths, [tf.shape(decoder_cell._zero_cell_output)], message = "_zero_cell_output")
+                    # decoder_lengths = tf.Print(decoder_lengths, [tf.shape(decoder_cell._zero_attention)], message = "_zero_attention")
+                    # decoder_lengths = tf.Print(decoder_lengths, [tf.shape(decoder_cell._zero_state)], message = "_zero_state")
+                    # decoder_lengths = tf.Print(decoder_lengths, [tf.shape(decoder_cell._zero_alignment)], message = "_zero_alignment")
+                    # decoder_lengths = tf.Print(decoder_lengths, [decoder_cell._memory_time], message = "memory time")
+                    
+#                     decoder_lengths = tf.Print(decoder_lengths, [tf.shape(board_state_conv)], message = "conv")
+#                     decoder_lengths = tf.Print(decoder_lengths, [tf.shape(board_alignments)], message = "alignments")
+#                     decoder_lengths = tf.Print(decoder_lengths, [tf.shape(raw_decoder_lengths)], message = "lengths")
+                    
+                    # decoder_lengths = tf.Print(decoder_lengths, [tf.shape(decoder_cell.alignments)], message = "alignments")
+                    # decoder_lengths = tf.Print(decoder_lengths, [decoder_cell.alignments.get_shape().rank], message = "alignments rank")
+                    # decoder_lengths = tf.Print(decoder_lengths, [tf.shape(decoder_cell.temp_alignments)], message = "temp_alignments")
+                    # decoder_lengths = tf.Print(decoder_lengths, [decoder_cell._alignments_ta.size()], message = "_alignments_ta: ")
+                    # decoder_lengths = tf.Print(decoder_lengths, [tf.shape(decoder_cell._zero_alignment)], message = "zero_alignment: ")
+                    
+                    # decoder_lengths = tf.Print(decoder_lengths, [tf.shape(decoder_cell._initial_attention)], message = "initial attention shape: ")
+                    # decoder_lengths = tf.Print(decoder_lengths, [decoder_cell._initial_attention], message = "initial attention: ")
+                    
+                    decoder_lengths = tf.Print(decoder_lengths, [decoder_type], message = "Decoder type: ")
+                    decoder_lengths = tf.Print(decoder_lengths, [temperature], message = "temperature: ")
+                    
+                
                     # Setting initial state
+                    # just returns two [128, 200] shape zero tensor (for regular cell)
+                    # this is enhanced stuff
                     decoder_init_state = decoder_cell.zero_state(batch_size, tf.float32)
 
                     # ---- Helper ----
                     helper = CustomHelper(decoder_type=decoder_type,
-                                          inputs=decoder_inputs[:, :-1],
+                                          inputs=decoder_inputs[:, :-1], # what is this?
                                           order_embedding=order_embedding,
                                           candidate_embedding=candidate_embedding,
                                           sequence_length=decoder_lengths,
@@ -372,9 +514,13 @@ class PolicyModel(OrderBasedPolicyModel):
                                                             maximum_iterations=maximum_iterations,
                                                             swap_memory=hps('swap_memory'))
                     global_vars_after_decoder = set(tf.global_variables())
+                    
+                    
 
                     # ======== Beam Search Decoding ========
                     tile_beam = get_tile_beam(hps('beam_width'))
+                    
+                    
 
                     # Applying Dropout to input, attention and output
                     decoder_cell = SeededDropoutWrapper(cell=lstm_cell,
@@ -394,7 +540,8 @@ class PolicyModel(OrderBasedPolicyModel):
 
                     # Setting initial state
                     decoder_init_state = decoder_cell.zero_state(batch_size * hps('beam_width'), tf.float32)
-
+                    
+                
                     # ---- Beam Helper and Decoder ----
                     beam_helper = CustomBeamHelper(cell=decoder_cell,
                                                    order_embedding=order_embedding,
@@ -415,7 +562,7 @@ class PolicyModel(OrderBasedPolicyModel):
                     assert not set(tf.global_variables()) - global_vars_after_decoder, 'New global vars were created'
 
                     # Processing results
-                    candidate_logits = training_results.rnn_output                  # (b, dec_len, max_cand_len)
+                    candidate_logits = training_results.rnn_output                  # (b, dec_len, max_cand_len)        
                     logits_length = tf.shape(candidate_logits)[1]                   # dec_len
                     decoder_target = decoder_inputs[:, 1:1 + logits_length]
 

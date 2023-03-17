@@ -41,6 +41,7 @@ class OrderBasedPolicyModel(BasePolicyModel):
             :type dataset: diplomacy_research.models.datasets.supervised_dataset.SupervisedDataset
             :type dataset: diplomacy_research.models.datasets.queue_dataset.QueueDataset
         """
+        print("Hyperparameters are: ", hparams)
         from diplomacy_research.utils.tensorflow import tf
         hps = lambda hparam_name: self.hparams[hparam_name]
         BasePolicyModel.__init__(self, dataset, hparams)
@@ -90,6 +91,7 @@ class OrderBasedPolicyModel(BasePolicyModel):
 
     @property
     def _placeholders(self):
+        print("I am inside placeholder property")
         """ Return a dictionary of all placeholders needed by the model """
         from diplomacy_research.utils.tensorflow import tf, get_placeholder, get_placeholder_with_default
 
